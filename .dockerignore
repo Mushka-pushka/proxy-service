@@ -1,0 +1,17 @@
+# Git
+.git/
+.gitignore
+
+# Документация
+README.md
+
+# Временные файлы
+tmp/
+temp/
+
+# IDE
+.idea/
+.vscode/
+
+# Docker
+docker/

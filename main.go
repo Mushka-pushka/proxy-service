@@ -2,14 +2,16 @@ package main
 
 import (
     "bytes"
-	"context"
+    "context"
     "log"
     "net/http"
     "net/http/httputil"
     "net/url"
+    "os"
+    "strconv"
     "time"
 
-	"github.com/valkey-io/valkey-go"
+    "github.com/valkey-io/valkey-go"
 )
 
 type ResponseRecorder struct {
@@ -39,41 +41,71 @@ func (r *ResponseRecorder) GetBody() []byte {
     return r.body.Bytes()
 }
 
+func getEnv(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+    if value := os.Getenv(key); value != "" {
+        if intVal, err := strconv.Atoi(value); err == nil {
+            return intVal
+        }
+    }
+    return defaultValue
+}
+
 func main() {
-    originURL, err := url.Parse("http://localhost:8081")
+    originURL := getEnv("ORIGIN_URL", "http://localhost:8081")
+    valkeyAddr := getEnv("VALKEY_ADDR", "localhost:6379")
+    cacheTTL := getEnvInt("CACHE_TTL", 30)
+    rateLimit := getEnvInt("RATE_LIMIT", 10)
+    rateWindow := getEnvInt("RATE_WINDOW", 60)
+
+    targetURL, err := url.Parse(originURL)
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Invalid ORIGIN_URL: %v", err)
     }
 
-    proxy := httputil.NewSingleHostReverseProxy(originURL)
+    proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
     client, err := valkey.NewClient(valkey.ClientOption{
-        InitAddress: []string{"localhost:6379"},
+        InitAddress: []string{valkeyAddr},
     })
     if err != nil {
-        log.Printf("Could not connect to Valkey: %v", err)
+        log.Printf("Could not connect to Valkey at %s: %v", valkeyAddr, err)
         log.Println("Running without Valkey (cache disabled, rate limiting disabled)")
         startServer(proxy, nil, nil)
         return
     }
     defer client.Close()
 
-    log.Println("Connected to Valkey at localhost:6379")
+    ctx := context.Background()
+    if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+        log.Printf("Valkey ping failed: %v", err)
+        log.Println("Running without Valkey (cache disabled, rate limiting disabled)")
+        startServer(proxy, nil, nil)
+        return
+    }
+
+    log.Printf("Connected to Valkey at %s", valkeyAddr)
 
     cache := &ValkeyCache{
         client: client,
         ctx:    context.Background(),
-        ttl:    30 * time.Second,
+        ttl:    time.Duration(cacheTTL) * time.Second,
     }
 
-    limiter := NewRateLimiter(client, 10, 60*time.Second)
+    limiter := NewRateLimiter(client, rateLimit, time.Duration(rateWindow)*time.Second)
 
     startServer(proxy, cache, limiter)
 }
 
 func startServer(proxy *httputil.ReverseProxy, cache CacheInterface, limiter *RateLimiter) {
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        // Rate limiting
+
         if limiter != nil {
             ip := r.RemoteAddr
             allowed, err := limiter.Allow(ip)
@@ -100,12 +132,11 @@ func startServer(proxy *httputil.ReverseProxy, cache CacheInterface, limiter *Ra
             log.Printf("Cache MISS: %s", cacheKey)
 
             recorder := NewResponseRecorder(w)
-
             proxy.ServeHTTP(recorder, r)
 
             if recorder.status == 200 || recorder.status == 0 {
                 cache.Set(cacheKey, recorder.GetBody())
-                log.Printf("💾 Cached: %s", cacheKey)
+                log.Printf("Cached: %s", cacheKey)
             }
         } else {
             proxy.ServeHTTP(w, r)
