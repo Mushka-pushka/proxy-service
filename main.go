@@ -2,14 +2,16 @@ package main
 
 import (
     "bytes"
+	"context"
     "log"
     "net/http"
     "net/http/httputil"
     "net/url"
     "time"
+
+	"github.com/valkey-io/valkey-go"
 )
 
-// ResponseRecorder перехватывает ответ для кеширования
 type ResponseRecorder struct {
     http.ResponseWriter
     body   *bytes.Buffer
@@ -38,36 +40,57 @@ func (r *ResponseRecorder) GetBody() []byte {
 }
 
 func main() {
-    // Парсим URL origin-сервера
     originURL, err := url.Parse("http://localhost:8081")
     if err != nil {
         log.Fatal(err)
     }
 
-    // Создаём reverse proxy
     proxy := httputil.NewSingleHostReverseProxy(originURL)
 
-    // Создаём кеш на основе Valkey
-    var cache CacheInterface
-    
-    // Пытаемся подключиться к Valkey
-    valkeyCache, err := NewValkeyCache("localhost:6379", 30*time.Second)
+    client, err := valkey.NewClient(valkey.ClientOption{
+        InitAddress: []string{"localhost:6379"},
+    })
     if err != nil {
         log.Printf("Could not connect to Valkey: %v", err)
-        log.Println("Falling back to in-memory cache")
-        cache = NewCache(30 * time.Second)
-    } else {
-        cache = valkeyCache
-        defer valkeyCache.Close()
+        log.Println("Running without Valkey (cache disabled, rate limiting disabled)")
+        startServer(proxy, nil, nil)
+        return
+    }
+    defer client.Close()
+
+    log.Println("Connected to Valkey at localhost:6379")
+
+    cache := &ValkeyCache{
+        client: client,
+        ctx:    context.Background(),
+        ttl:    30 * time.Second,
     }
 
-    // Обработчик всех запросов
+    limiter := NewRateLimiter(client, 10, 60*time.Second)
+
+    startServer(proxy, cache, limiter)
+}
+
+func startServer(proxy *httputil.ReverseProxy, cache CacheInterface, limiter *RateLimiter) {
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        // Кешируем только GET-запросы
-        if r.Method == "GET" {
+        // Rate limiting
+        if limiter != nil {
+            ip := r.RemoteAddr
+            allowed, err := limiter.Allow(ip)
+            if err != nil {
+                log.Printf("Rate limiter error: %v", err)
+                http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+                return
+            }
+            if !allowed {
+                http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+                return
+            }
+        }
+
+        if r.Method == "GET" && cache != nil {
             cacheKey := r.URL.String()
 
-            // Проверяем кеш
             if cachedData, found := cache.Get(cacheKey); found {
                 log.Printf("Cache HIT: %s", cacheKey)
                 w.Write(cachedData)
@@ -76,24 +99,20 @@ func main() {
 
             log.Printf("Cache MISS: %s", cacheKey)
 
-            // Создаём рекордер для перехвата ответа
             recorder := NewResponseRecorder(w)
 
-            // Перенаправляем запрос на origin
             proxy.ServeHTTP(recorder, r)
 
-            // Если статус 200, сохраняем в кеш
             if recorder.status == 200 || recorder.status == 0 {
                 cache.Set(cacheKey, recorder.GetBody())
-                log.Printf("Cached: %s", cacheKey)
+                log.Printf("💾 Cached: %s", cacheKey)
             }
         } else {
-            // Для не-GET запросов просто проксируем
             proxy.ServeHTTP(w, r)
         }
     })
 
-    log.Println("Proxy server with Valkey cache starting on :8080")
+    log.Println("Proxy server with Valkey cache and rate limiting starting on :8080")
     if err := http.ListenAndServe(":8080", nil); err != nil {
         log.Fatal(err)
     }
