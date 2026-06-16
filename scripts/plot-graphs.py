@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import os
 
-# Создаём папку для графиков, если её нет
 os.makedirs('results/graphs', exist_ok=True)
 
 def load_metrics(filename):
@@ -63,7 +62,6 @@ def plot_baseline(times, values, title, filename):
     
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
     
-    # График 1: Время ответа по времени
     ax1.plot(times, values, 'o-', color='green', markersize=1, linewidth=0.5)
     ax1.axhline(y=sum(values)/len(values), color='red', linestyle='--', label=f'Среднее: {sum(values)/len(values):.2f} мс')
     ax1.set_title(f'{title} - Время ответа по времени', fontsize=14)
@@ -72,7 +70,6 @@ def plot_baseline(times, values, title, filename):
     ax1.grid(True, alpha=0.3)
     ax1.legend()
     
-    # График 2: Гистограмма распределения
     ax2.hist(values, bins=50, color='green', alpha=0.7, edgecolor='black')
     ax2.set_title(f'{title} - Распределение времени ответа', fontsize=14)
     ax2.set_xlabel('Время ответа (мс)', fontsize=12)
@@ -92,7 +89,6 @@ def compare_baseline(data1, data2, label1, label2):
     
     fig, ax = plt.subplots(figsize=(12, 6))
     
-    # Строим гистограммы
     ax.hist(data1, bins=50, alpha=0.5, label=label1, color='blue')
     ax.hist(data2, bins=50, alpha=0.5, label=label2, color='orange')
     
@@ -107,19 +103,46 @@ def compare_baseline(data1, data2, label1, label2):
     plt.show()
     print("Сравнительный график сохранён: results/graphs/comparison.png")
 
+def plot_stress(times, values):
+    """График для stress-теста"""
+    if not times:
+        print("Нет данных для stress-теста")
+        return
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+    
+    ax1.plot(times, values, 'o-', color='red', markersize=1, linewidth=0.5)
+    ax1.axhline(y=sum(values)/len(values), color='orange', linestyle='--', label=f'Среднее: {sum(values)/len(values):.2f} мс')
+    ax1.set_title('Stress-тест - Время ответа при росте нагрузки (100→5000 RPS)', fontsize=14)
+    ax1.set_xlabel('Время', fontsize=12)
+    ax1.set_ylabel('Время ответа (мс)', fontsize=12)
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    ax2.hist(values, bins=50, color='red', alpha=0.7, edgecolor='black')
+    ax2.set_title('Stress-тест - Распределение времени ответа', fontsize=14)
+    ax2.set_xlabel('Время ответа (мс)', fontsize=12)
+    ax2.set_ylabel('Количество запросов', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('results/graphs/stress-test.png', dpi=150)
+    plt.show()
+    print("График stress-теста сохранён: results/graphs/stress-test.png")
+
 def main():
     print("Загружаем данные...")
     
-    # Загружаем данные из всех трёх тестов
     smoke_times, smoke_values = load_metrics('results/smoke-test.json')
     baseline_times, baseline_values = load_metrics('results/baseline-without-proxy.json')
     proxy_times, proxy_values = load_metrics('results/baseline-with-proxy.json')
+    stress_times, stress_values = load_metrics('results/stress-test.json')
     
     print(f"Smoke-тест: {len(smoke_values)} записей")
     print(f"Baseline без прокси: {len(baseline_values)} записей")
     print(f"Baseline с прокси: {len(proxy_values)} записей")
+    print(f"Stress-тест: {len(stress_values)} записей")
     
-    # Строим графики
     if smoke_values:
         plot_smoke_test(smoke_times, smoke_values)
     else:
@@ -135,9 +158,13 @@ def main():
     else:
         print("Нет данных для baseline-теста с прокси")
     
-    # Сравнительный график
     if baseline_values and proxy_values:
         compare_baseline(baseline_values, proxy_values, "Без прокси", "С прокси")
+    
+    if stress_values:
+        plot_stress(stress_times, stress_values)
+    else:
+        print("Нет данных для stress-теста")
     
     print("\nВсе графики сохранены в папке results/graphs/")
 
