@@ -1,0 +1,28 @@
+# Большие файлы результатов тестов
+results/*.json
+results/graphs/*.png
+
+# Временные файлы
+*.tmp
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/proxy-service
+/proxy-service.exe
+*.test
+*.out
+vendor/
