@@ -25,4 +25,4 @@ Thumbs.db
 /proxy-service.exe
 *.test
 *.out
-vendor/
+vendor/results/
