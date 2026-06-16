@@ -34,7 +34,7 @@ services:
       - ORIGIN_URL=http://origin:8081
       - VALKEY_ADDR=valkey:6379
       - CACHE_TTL=30
-      - RATE_LIMIT=10
+      - RATE_LIMIT=30000
       - RATE_WINDOW=60
     depends_on:
       - origin

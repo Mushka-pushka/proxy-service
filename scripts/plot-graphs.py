@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import os
 
+# Создаём папку для графиков, если её нет
 os.makedirs('results/graphs', exist_ok=True)
 
 def load_metrics(filename):
@@ -22,7 +23,6 @@ def load_metrics(filename):
                     point = data.get('data', {})
                     time_str = point.get('time', '')
                     if time_str:
-                        
                         try:
                             t = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
                             times.append(t)
@@ -55,9 +55,10 @@ def plot_smoke_test(times, values):
     plt.show()
     print("График smoke-теста сохранён: results/graphs/smoke-test.png")
 
-def plot_baseline(times, values, title="Baseline без прокси"):
+def plot_baseline(times, values, title, filename):
     """График для baseline-теста"""
     if not times:
+        print(f"Нет данных для {title}")
         return
     
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
@@ -79,20 +80,44 @@ def plot_baseline(times, values, title="Baseline без прокси"):
     ax2.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    filename = title.lower().replace(' ', '-')
     plt.savefig(f'results/graphs/{filename}.png', dpi=150)
     plt.show()
     print(f"График {title} сохранён: results/graphs/{filename}.png")
 
+def compare_baseline(data1, data2, label1, label2):
+    """Сравнительный график двух тестов"""
+    if not data1 or not data2:
+        print("Недостаточно данных для сравнения")
+        return
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Строим гистограммы
+    ax.hist(data1, bins=50, alpha=0.5, label=label1, color='blue')
+    ax.hist(data2, bins=50, alpha=0.5, label=label2, color='orange')
+    
+    ax.set_title('Сравнение времени ответа: без прокси vs с прокси', fontsize=14)
+    ax.set_xlabel('Время ответа (мс)', fontsize=12)
+    ax.set_ylabel('Количество запросов', fontsize=12)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('results/graphs/comparison.png', dpi=150)
+    plt.show()
+    print("Сравнительный график сохранён: results/graphs/comparison.png")
+
 def main():
     print("Загружаем данные...")
     
-    # Загружаем данные
+    # Загружаем данные из всех трёх тестов
     smoke_times, smoke_values = load_metrics('results/smoke-test.json')
     baseline_times, baseline_values = load_metrics('results/baseline-without-proxy.json')
+    proxy_times, proxy_values = load_metrics('results/baseline-with-proxy.json')
     
     print(f"Smoke-тест: {len(smoke_values)} записей")
     print(f"Baseline без прокси: {len(baseline_values)} записей")
+    print(f"Baseline с прокси: {len(proxy_values)} записей")
     
     # Строим графики
     if smoke_values:
@@ -101,11 +126,20 @@ def main():
         print("Нет данных для smoke-теста")
     
     if baseline_values:
-        plot_baseline(baseline_times, baseline_values, "Baseline без прокси (500 RPS)")
+        plot_baseline(baseline_times, baseline_values, "Baseline без прокси (500 RPS)", "baseline-без-прокси")
     else:
-        print("Нет данных для baseline-теста")
+        print("Нет данных для baseline-теста без прокси")
     
-    print("\n Все графики сохранены в папке results/graphs/")
+    if proxy_values:
+        plot_baseline(proxy_times, proxy_values, "Baseline с прокси (500 RPS)", "baseline-с-прокси")
+    else:
+        print("Нет данных для baseline-теста с прокси")
+    
+    # Сравнительный график
+    if baseline_values and proxy_values:
+        compare_baseline(baseline_values, proxy_values, "Без прокси", "С прокси")
+    
+    print("\nВсе графики сохранены в папке results/graphs/")
 
 if __name__ == "__main__":
     main()
