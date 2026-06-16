@@ -47,8 +47,19 @@ func main() {
     // Создаём reverse proxy
     proxy := httputil.NewSingleHostReverseProxy(originURL)
 
-    // Создаём кеш с TTL 30 секунд
-    cache := NewCache(30 * time.Second)
+    // Создаём кеш на основе Valkey
+    var cache CacheInterface
+    
+    // Пытаемся подключиться к Valkey
+    valkeyCache, err := NewValkeyCache("localhost:6379", 30*time.Second)
+    if err != nil {
+        log.Printf("Could not connect to Valkey: %v", err)
+        log.Println("Falling back to in-memory cache")
+        cache = NewCache(30 * time.Second)
+    } else {
+        cache = valkeyCache
+        defer valkeyCache.Close()
+    }
 
     // Обработчик всех запросов
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +93,7 @@ func main() {
         }
     })
 
-    log.Println("Proxy server with cache starting on :8080")
+    log.Println("Proxy server with Valkey cache starting on :8080")
     if err := http.ListenAndServe(":8080", nil); err != nil {
         log.Fatal(err)
     }
