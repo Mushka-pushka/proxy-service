@@ -1,22 +1,19 @@
 import http from 'k6/http';
-import { check } from 'k6';  
+import { check, sleep } from 'k6';
 
 export const options = {
     stages: [
-        { duration: '2m', target: 20 },     
-        { duration: '2m', target: 40 },     
-        { duration: '2m', target: 60 },     
-        { duration: '2m', target: 80 },     
-        { duration: '2m', target: 100 },    
+        { duration: '1m', target: 100 },    
+        { duration: '1m', target: 500 },    
+        { duration: '1m', target: 1000 },   
+        { duration: '1m', target: 2000 },   
+        { duration: '1m', target: 3000 },   
+        { duration: '1m', target: 4000 },   
+        { duration: '1m', target: 5000 },   
         { duration: '1m', target: 0 },      
     ],
-    rps: 5000,
     thresholds: {
-        http_req_failed: ['rate<0.10'],
-    },
-    cloud: {
-        projectID: 7832713,
-        name: 'Stress test - 100 VU max',
+        http_req_failed: ['rate<0.10'],    
     },
 };
 
@@ -27,4 +24,5 @@ export default function () {
         'status is 200': (r) => r.status === 200,
     });
     
+    sleep(0.1);
 }
