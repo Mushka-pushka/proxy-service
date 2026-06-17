@@ -21,60 +21,76 @@ Reverse-proxy сервис на Go с кешированием (Valkey) и rate 
 
 
 ## Структура проекта
+
+```
 proxy-service/
-├── main.go # Точка входа, прокси-сервер
-├── cache.go # In-memory кеш
-├── cache_interface.go # Интерфейс кеша
-├── cache_valkey.go # Реализация кеша через Valkey
-├── limiter.go # Rate limiter (IP, Valkey)
-├── docker-compose.yml # Docker Compose
-├── .gitignore # Игнорируемые файлы
+├── main.go                        # Точка входа, прокси-сервер
+├── cache.go                       # In-memory кеш
+├── cache_interface.go             # Интерфейс кеша
+├── cache_valkey.go                # Реализация кеша через Valkey
+├── limiter.go                     # Rate limiter (IP, Valkey)
+├── docker-compose.yml             # Docker Compose
+├── .gitignore                     # Игнорируемые файлы
 │
 ├── docker/
-│ └── Dockerfile # Multi-stage Dockerfile
+│   ├── Dockerfile                 # Multi-stage Dockerfile
+│   └── nginx/
+│       └── default.conf           # Конфиг Nginx (origin)
 │
-├── k6/ # Нагрузочные тесты
-│ ├── smoke-test.js # Дымовой тест
-│ ├── baseline-without-proxy.js # 500 RPS без прокси
-│ ├── baseline-with-proxy.js # 500 RPS через прокси
-│ └── stress-test.js # Стресс-тест 100→5000 RPS
+├── k6/                            # Нагрузочные тесты
+│   ├── smoke-test.js              # Дымовой тест
+│   ├── baseline-without-proxy.js  # 500 RPS без прокси
+│   ├── baseline-with-proxy.js     # 500 RPS через прокси
+│   └── stress-test.js             # Стресс-тест 100→5000 RPS
 │
 └── scripts/
-└── plot-graphs.py # Построение графиков
+    └── plot-graphs.py             # Построение графиков
+```
 
 
-## Запуск
+# Запуск
 
-### 1. Запуск через Docker Compose (рекомендуемый способ)
+## 1. Запуск через Docker Compose (рекомендуемый способ)
 
-# Клонировать репозиторий
+### Клонировать репозиторий
+``` bash
 git clone https://github.com/Mushka-pushka/proxy-service.git
 cd proxy-service
-# Запустить все сервисы
+```
+### Запустить все сервисы
+``` bash
 docker-compose up --build
+```
 
-# Сервисы:
+### Сервисы:
+```
 Прокси: http://localhost:8080
 Origin (nginx): http://localhost:8081
 Valkey: localhost:6379
+```
 
-### 2. Локальный запуск (без Docker)
+## 2. Локальный запуск (без Docker)
 
-# Установить зависимости
+### Установить зависимости
+``` bash 
 go mod download
-# Запустить origin
+```
+### Запустить origin
+``` bash 
 go run origin/main.go
-# Запустить прокси
+```
+### Запустить прокси
+``` bash 
 go run main.go cache.go cache_interface.go cache_valkey.go limiter.go
+```
 
 ## Нагрузочное тестирование
 ### Установка k6
- Windows (скачать .msi)
- Mac
-brew install k6
- Linux
-sudo apt-get install k6
-
+```
+Windows (скачать .msi)
+Mac      brew install k6
+Linux    sudo apt-get install k6
+```
 
 ## Результаты тестов
 
@@ -109,12 +125,16 @@ k6 run k6/stress-test.js
 k6 run --out json=results/test-name.json k6/test-name.js
 ```
 
-## Построение графиков
+# Построение графиков
 
-# Установка Python зависимостей
+### Установка Python зависимостей
+``` bash
 pip install matplotlib
-# Запуск скрипта
+```
+### Запуск скрипта
+``` bash 
 python scripts/plot-graphs.py
+```
 
 Все графики сохраняются в папку `results/graphs/`:
 - `smoke-test.png` — Smoke-тест
@@ -124,14 +144,20 @@ python scripts/plot-graphs.py
 - `stress-test.png` — Стресс-тест
 
 
-## Docker
+# Docker
 
-# Сборка образа
+### Сборка образа
+``` bash 
 docker build -f docker/Dockerfile -t proxy-service .
-# Запуск через Docker Compose
+```
+### Запуск через Docker Compose
+``` bash 
 docker-compose up --build
-# Остановка
+```
+### Остановка
+``` bash 
 docker-compose down
+```
 
 ## Переменные окружения
 | Переменная    | По умолчанию            | Описание                    |
@@ -144,15 +170,6 @@ docker-compose down
 
 
 ## Используемые инструменты
-Инструмент	Версия	Назначение
-Go	        1.26.4	Язык программирования
-Docker	    27.3.1	Контейнеризация
-Valkey	    9.1.0	Кеш и rate limiter
-Nginx	    Alpine	Тестовый origin
-k6	        2.0.0	Нагрузочное тестирование
-Python	    3.12.7	Построение графиков
-
-## 🛠️ Используемые инструменты
 
 | Инструмент         | Версия | Назначение               |
 |--------------------|--------|--------------------------|
